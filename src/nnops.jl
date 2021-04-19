@@ -136,3 +136,101 @@ end
 function apply(normalization::UniformAdditiveNormalization, X::LazySet)
     return translate(X, fill(normalization.shift, dim(X)))
 end
+
+# ==============================================================================
+# Propagation using star sets
+#
+# See Algorithm 1 in [1].
+#
+# [1] Tran, H. D., Lopez, D. M., Musau, P., Yang, X., Nguyen, L. V., Xiang, W., &
+#     Johnson, T. T. (2019, October). *Star-based reachability analysis of deep neural networks.*
+#      In International Symposium on Formal Methods (pp. 670-686). Springer, Cham.
+# ==============================================================================
+
+function reach_relu(Θ::Star{N, VN, MN, PT}) where {N, VN, MN, PT}
+
+    n = dim(Θ)
+    Θbox = box_approximation(Θ)
+
+    # processing list
+    #HT = HPolyhedron{Float64, Vector{Float64}}
+    #Star{N, VN, MN, Union{PT, HT}
+    #ST = Union{typeof(Θ), STP}}
+    out = Vector{Vector{<:Star}}(undef, n+1)
+    out[1] = [Θ]
+
+    for k in 1:n  # loop over directions
+
+        # get lower bound on the current direction
+        lb = low(Θbox, k)
+
+        # check if the star is included in the current positive orthant
+        if lb ≥ 0
+           out[k+1] = out[k] # identity
+           continue
+        end
+
+        ub = high(Θbox, k)
+        out[k+1] = step_relu(out[k], k, lb, ub)
+    end
+
+    #return UnionSetArray(out[end])
+    return out[end]
+end
+
+# identity matrix but the k-th column is zero
+function _relu_projection_matrix(k, n; N=Float64)
+    M = Matrix(one(N)*I, n, n)
+    M[k, k] = zero(N)
+    return M
+end
+
+# the half-space xk ≥ 0
+function _relu_projection_halfspace(k, n; N=Float64)
+    a = zeros(N, n) # note: could also return a SEV
+    a[k] = -one(N)
+    b = zero(N)
+    return HalfSpace(a, b)
+end
+
+# the half-space xk ≤ 0
+function _relu_projection_halfspace_neg(k, n; N=Float64)
+    a = zeros(N, n)
+    a[k] = one(N)
+    b = zero(N)
+    return HalfSpace(a, b)
+end
+
+function step_relu(Θ::ST, k, lb, ub) where {ST<:Star}
+    n = dim(Θ)
+
+    # no-op: all positive
+    if lb ≥ 0
+        return [Θ]
+    end
+
+    # all negative
+    M = _relu_projection_matrix(k, n)
+    if ub ≤ 0
+        Θnew = linear_map(M, Θ)
+        return [Θnew]
+    end
+
+    # general case
+    H = _relu_projection_halfspace(k, n) # x[k] ≥ 0
+    Θnew_pos = intersection(Θ, H)
+
+    Hneg = _relu_projection_halfspace_neg(k, n) # x[k] < 0
+    Θnew_neg = intersection(Θ, Hneg)
+    Θnew_neg = linear_map(M, Θnew_neg)
+    return [Θnew_pos, Θnew_neg]
+end
+
+function step_relu(Θ::Vector{ST}, k, lb, ub) where {ST<:Star}
+    out = Vector{Star}()
+    for Θi in Θ
+        Θnew = step_relu(Θi, k, lb, ub)
+        append!(out, Θnew)
+    end
+    return out
+end
