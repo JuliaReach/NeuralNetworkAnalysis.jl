@@ -74,7 +74,7 @@ vars_idx = Dict(:state_vars=>1:4, :control_vars=>5:6);
 ivp = @ivp(x' = double_pendulum!(x), dim: 6, x(0) ∈ X₀ × U₀);
 
 period = use_less_robust_controller ? 0.05 : 0.02;  # control period
-T = 20 * period;  # time horizon
+T = 3 * period;  # time horizon
 
 prob = ControlledPlant(ivp, controller, vars_idx, period);
 
@@ -85,7 +85,7 @@ safe_states = use_less_robust_controller ?
 # ## Results
 
 alg = TMJets20(abstol=1e-8, orderT=4, orderQ=2);
-alg_nn = Ai2();
+alg_nn = SampledApprox(nsamples=100, include_vertices=false);
 
 @time sol = solve(prob, T=T, alg_nn=alg_nn, alg=alg);
 
