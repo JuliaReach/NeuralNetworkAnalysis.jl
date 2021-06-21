@@ -201,7 +201,7 @@ fig = plot(xlab="θ₁'", ylab="θ₂'")
 sol, sim, prob, spec = res_false
 if falsification
     plot!(leg=:topleft)
-    ylims!(-0.7, 1.5)
+    ylims!(-1.0, 1.5)
 else
     xlims!(-1.8, 1.5)
     ylims!(-1.6, 1.5)
