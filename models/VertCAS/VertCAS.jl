@@ -9,7 +9,7 @@
 
 module VertCAS  #jl
 
-using NeuralNetworkAnalysis
+using NeuralNetworkAnalysis, LinearAlgebra
 
 # ## Model
 #
@@ -162,9 +162,25 @@ function get_acceleration(X::State, adv; ACC=ACC_MIDDLE)
     end
 end
 
+const normalization_additive = -[0.0, 0, 20]
+const normalization_multiplicative = 1.0 ./ [16000.0, 5000, 40]
+
+function normalize(x::AbstractVector)
+    y = x .+ normalization_additive
+    z = y .* normalization_multiplicative
+    return z
+end
+
+function normalize(X::AbstractZonotope)
+    Y = minkowski_sum(X, Singleton(normalization_additive))
+    Z = linear_map(diagm(normalization_multiplicative), Y)
+    return Z
+end
+
 ## scalar case; alg is ignored
 function forward_adv(X::Singleton, τ, adv; alg=nothing)
     v = vcat(element(X), τ)
+    v = normalize(v)
     u = forward(CONTROLLERS[adv], v)
     imax = argmax(u)
     return CTRL_IDX[imax]
@@ -174,6 +190,7 @@ end
 function forward_adv(X::AbstractZonotope, τ, adv; alg=Ai2())
     Y = cartesian_product(X, Singleton([τ]))
 
+    Y = normalize(Y)
     out = forward_network(alg, CONTROLLERS[adv], Y)
 
     imax = argmax(high(out))
